@@ -1,0 +1,12 @@
+{
+    "env":{
+        "JWT_SECRET":"secret",
+        "GOOGLE_CLIENT_ID":"",
+        "TWILIO_ACCOUNT_SID":"AC1615c4fe4eb60a9c0d4aac0b96c5fa69",
+        "TWILIO_AUTH_TOKEN":"b98c59bb39961f7e610075acd95c1fce",
+        "TWILIO_PHONE_NUMBER":"+17657905727",
+        "VONAGE_API_KEY":"1e854266",
+        "VONAGE_API_SECRET":"J51rM9Hj3yyK7X4f",
+        "VONAGE_BRAND_NAME":"Yellofix"
+    }
+}
