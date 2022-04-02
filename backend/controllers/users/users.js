@@ -5,17 +5,11 @@ const jwt = require('jsonwebtoken');
 const { googleClient } =require('google-auth-library')
 const optGenerator = require('otp-generator');
 const HttpError = require('../../helpers/http-error');
-const Vonage = require('@vonage/server-sdk')
-
-const vonage = new Vonage({
-  apiKey: process.env.VONAGE_API_KEY,
-  apiSecret: process.env.VONAGE_API_SECRET
-})
-
-
+const sendSms = require("../../helpers/twilio");
 
 const User = db.users;
 const Opt = db.opts;
+const FOpt = db.fopts;
 
 
 exports.RegisterUser = async (req,res,next) => {
@@ -70,11 +64,10 @@ exports.RegisterUser = async (req,res,next) => {
 
 };
 exports.SignUp = async (req,res,next) => {
-     const { cellNumber,firstName,lastName,email,password} = req.body;
-
+     const { number,firstName,lastName,email,password} = req.body;
      let existingUser;
      try {
-          existingUser = await User.findOne({where:{cellNumber:cellNumber}})
+          existingUser = await User.findOne({where:{cellNumber:number}})
      }catch(err) {
           return next(
                new HttpError('could not found user',404)
@@ -95,29 +88,24 @@ exports.SignUp = async (req,res,next) => {
      
 
      let opt = {
-          number: cellNumber,
+          number,
           opt:OPT,
           email,
           password,
           firstName,
           lastName
      };
+
      const salt = await bcrypt.genSalt(10);
      opt.opt = await bcrypt.hash(opt.opt,salt);
      await Opt.create(opt);
-     
-
-     vonage.message.sendSms(process.env.VONAGE_BRAND_NAME, cellNumber, OPT, (err, responseData) => {
-          if (err) {
-              console.log(err);
-          } else {
-              if(responseData.messages[0]['status'] === "0") {
-                  console.log("Message sent successfully.");
-              } else {
-                  console.log(`Message failed with error: ${responseData.messages[0]['error-text']}`);
-              }
-          }
-      })
+     let text = `Yellofix Verification ${OPT}`;
+       
+      try{
+           await sendSms('+233 24 985 5932',text);
+      }catch(err) {
+          console.log(err);
+      }
 
      res.status(200).send("Opt send successfully!")
 
@@ -169,11 +157,114 @@ exports.verifyOpt = async (req,res,next) => {
           return res.status(201).json({user});
       }else { 
 
-           return res.status(201).send("Opt was wrong.");
+           return res.status(400).send("Opt was wrong.");
       }
-      
+}
+exports.forgetPassword = async (req,res,next) => {
+     const { emailOrPhone } = req.body;
+     let condition = !emailOrPhone.contains('@') ? { cellNumber:phoneNumber} : {email:email}
+     let user;
+     try {
+          user = await User.findOne({where:condition});
+     }catch(err) {
+          return next(
+               new HttpError('could not fetch user',500)
+          )
+     }
+     
+     if(!user) {
+          return next(
+               new HttpError('user not found,consider creating an account',404)
+          )
+     }
+     const OPT = optGenerator.generate(4,{
+          digits:true,
+          upperCaseAlphabets:true,
+          lowerCaseAlphabets:false,
+          specialChars:false
+          
+     });
+     let opt = {
+           opt: OPT,
+           emailOrPhone:emailOrPhone
+     }
+     const salt = await bcrypt.genSalt(10)
+     opt.opt = await bcrypt.hash(opt.opt,salt);
+     await FOpt.create(opt);
 
+     let numberValue = !emailOrPhone.contains('@') ? emailOrPhone : user.cellNumber; 
+     let text = `Yellofix Reset Password ${OPT}`;
 
+     try {
+           await sendSms(numberValue,text);
+     }catch(err) {
+          return next(
+               new HttpError('could not send sms',500)
+          )
+     };
+
+     res.status(200).send("Opt send successfully");
+}
+exports.foptVerify = async (req,res,next) => {
+      const { emailOrPhone,opt} = req.body;
+      let optfind;
+      try {
+             optfind = await FOpt.findOne({where:{emailOrPhone:emailOrPhone}});
+      }catch(err) {
+          return next(
+               new HttpError('could not fetch opt',500)
+          );
+      }
+      if(!optfind) {
+           return next(
+                new HttpError('OPT expired',404)
+           )
+      }
+      let validUser = await bcrypt.compare(opt,optfind.opt);
+      if(emailOrPhone === optfind.emailOrPhone && validUser) {
+              await optfind.destroy();
+              return res.status(200).send("OPT verification successfully")
+      }else {
+          return res.status(400).send("OPT is wrong")
+      }     
+}
+exports.resetPassword = async (req,res,next) => {
+     const {email,password } = req.body;
+     let user;
+     try {
+           user = await User.findOne({where:{email}});
+     }catch(err) {
+          return next(
+               new HttpError('could not fetch user',500)
+          )
+     }
+     if(!user) {
+          return next(
+               new HttpError('user does not exists',404)
+          )
+     }
+     let hashedPassword = false;
+     try {
+          hashedPassword = await bcrypt.hash(password,10);
+     }catch(err) {
+         return next(
+              new HttpError('could not hash password',500)
+         );
+     }
+     const id = user.id;
+     let updatedUser;
+     try {
+               updatedUser = await User.upsert({
+                    id:id,
+                    password:hashedPassword
+               })
+     }catch(err) {
+          return next(
+               new HttpError('could not update user password',500)
+          )
+     }
+   
+     res.status(201).send("Password changed successfully");
 
 }
 exports.loginUser = async (req,res,next) => {
@@ -254,6 +345,7 @@ exports.getUser = async (req,res,next) => {
      }
      return res.status(200).json({user});
 };
+
 exports.deleteUser = async (req,res,next) => {
      const id = req.params.id;
      let user;
@@ -301,6 +393,35 @@ exports.updateUser = async (req,res,next) => {
     return res.status(200).json({updatedUser});
 
 };
+
+exports.uploadAvatar = async (req,res,next) => {
+     const { id } = req.params;
+     let  user;
+     try {
+            user = await User.findByPk(id);
+     }catch(err) {
+          return next(
+               new HttpError('could not fetch user',500)
+          );
+     }
+     if(!user) {
+          return next(
+               new HttpError('user not found',404)
+          )
+     }
+     let updatedUser;
+     try {
+           updatedUser = await User.upsert({
+                id:id,
+                image: req.file.path || user.image
+           });
+     }catch(err) {
+           return next(
+                new HttpError('photo not uploaded',400)
+           )
+     }
+     res.status(201).json({user:updatedUser});
+}
 exports.googleAuth = async (req,res,next) => {
      const { token } = req.body;
 

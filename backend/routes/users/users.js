@@ -32,4 +32,8 @@ router.post('/auth/twitter',usersController.twitterAuth);
 router.post('/auth/facebook',usersController.facebookAuth);
 router.post('/auth/linkedin',usersController.linkedinAuth);
 
+router.post('/mobile/forgotpassword',usersController.forgetPassword);
+router.post('/mobile/foptverify',usersController.foptVerify);
+router.post('/mobile/reset',usersController.resetPassword);
+
 module.exports = router;

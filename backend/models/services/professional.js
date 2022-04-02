@@ -18,8 +18,7 @@ module.exports = ( sequelize, DataTypes ) => {
             defaultValue: true
         },
         image: {
-             type:DataTypes.STRING,
-             allowNull: false
+             type:DataTypes.STRING
         },
         subscriptionMembershipType: {
             type: DataTypes.BOOLEAN,

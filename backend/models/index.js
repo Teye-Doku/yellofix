@@ -42,6 +42,7 @@ db.jobs = require('./services/job')(sequelize,DataTypes);
 db.professionals = require('./services/professional')(sequelize,DataTypes);
 db.questions = require('./question')(sequelize,DataTypes);
 db.opts = require('./users/opt')(sequelize,DataTypes);
+db.fopts = require('./users/fOpt')(sequelize,DataTypes);
 
 
 db.sequelize
